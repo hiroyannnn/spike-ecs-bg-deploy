@@ -38,3 +38,15 @@ variable "create_oidc_provider" {
   type        = bool
   default     = true
 }
+
+variable "min_capacity" {
+  description = "Minimum number of ECS tasks for auto scaling"
+  type        = number
+  default     = 1
+}
+
+variable "max_capacity" {
+  description = "Maximum number of ECS tasks for auto scaling"
+  type        = number
+  default     = 2
+}
