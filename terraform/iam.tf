@@ -186,7 +186,9 @@ resource "aws_iam_role_policy" "ecs_bluegreen" {
           "elasticloadbalancing:DescribeListeners",
           "elasticloadbalancing:DescribeRules",
           "elasticloadbalancing:ModifyListener",
-          "elasticloadbalancing:ModifyRule"
+          "elasticloadbalancing:ModifyRule",
+          "elasticloadbalancing:RegisterTargets",
+          "elasticloadbalancing:DeregisterTargets"
         ]
         Resource = "*"
       }
