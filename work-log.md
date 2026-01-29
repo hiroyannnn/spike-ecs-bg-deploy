@@ -38,19 +38,9 @@ terraform/
 ```bash
 $ aws sts get-caller-identity
 {
-    "UserId": "AIDA3RGUQGWQ3TRV6527P",
     "Account": "792867124641",
     "Arn": "arn:aws:iam::792867124641:user/hiroyannnn"
 }
-```
-
-### terraform init
-```bash
-$ cd terraform && terraform init
-
-Initializing provider plugins...
-- Installing hashicorp/aws v6.30.0...
-Terraform has been successfully initialized!
 ```
 
 ### terraform apply
@@ -70,28 +60,21 @@ task_definition_family  = "spike-ecs-bg-task-dev"
 
 ---
 
-## 3. サンプルアプリのデプロイ
-
-### ECR ログイン
-```bash
-$ aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin 792867124641.dkr.ecr.ap-northeast-1.amazonaws.com
-Login Succeeded
-```
+## 3. 手動デプロイ（初回検証）
 
 ### Docker イメージビルド & プッシュ
 ```bash
+# ECR ログイン
+$ aws ecr get-login-password --region ap-northeast-1 | docker login --username AWS --password-stdin 792867124641.dkr.ecr.ap-northeast-1.amazonaws.com
+
 # x86_64 向けにビルド（Fargate 用）
 $ docker build --platform linux/amd64 -t 792867124641.dkr.ecr.ap-northeast-1.amazonaws.com/spike-ecs-bg-dev:v2 .
 $ docker push 792867124641.dkr.ecr.ap-northeast-1.amazonaws.com/spike-ecs-bg-dev:v2
 ```
 
-### タスク定義の更新 & デプロイ
+### ECS デプロイ
 ```bash
-# 現在のタスク定義を取得してイメージを更新
-$ aws ecs describe-task-definition --task-definition spike-ecs-bg-task-dev --query taskDefinition > /tmp/task-def.json
-$ cat /tmp/task-def.json | jq '.containerDefinitions[0].image = "792867124641.dkr.ecr.ap-northeast-1.amazonaws.com/spike-ecs-bg-dev:v2"' > /tmp/task-def-new.json
-
-# 新しいタスク定義を登録
+# タスク定義を登録
 $ aws ecs register-task-definition --cli-input-json file:///tmp/task-def-new.json
 arn:aws:ecs:ap-northeast-1:792867124641:task-definition/spike-ecs-bg-task-dev:3
 
@@ -99,18 +82,42 @@ arn:aws:ecs:ap-northeast-1:792867124641:task-definition/spike-ecs-bg-task-dev:3
 $ aws ecs update-service --cluster spike-ecs-bg-cluster-dev --service spike-ecs-bg-service-dev --task-definition spike-ecs-bg-task-dev:3 --force-new-deployment
 ```
 
-### アプリログ
+---
+
+## 4. GitHub Actions CI/CD
+
+### セットアップ
+```bash
+# GitHub Secrets に AWS_ROLE_ARN を設定
+$ gh secret set AWS_ROLE_ARN --body "arn:aws:iam::792867124641:role/spike-ecs-bg-github-actions-dev"
+
+# コード変更をプッシュ
+$ git add . && git commit -m "feat: Add ECS Fargate infrastructure" && git push
 ```
-INFO:     Started server process [1]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)
-INFO:     10.0.1.91:64712 - "GET /health HTTP/1.1" 200 OK
+
+### デプロイ結果
+```
+✓ Deploy to ECS (4m51s)
+  ✓ Configure AWS credentials (OIDC)
+  ✓ Login to Amazon ECR
+  ✓ Build, tag, and push image to Amazon ECR
+  ✓ Download task definition
+  ✓ Render Amazon ECS task definition
+  ✓ Deploy Amazon ECS task definition
+```
+
+### サービス状態
+```json
+{
+    "running": 1,
+    "desired": 1,
+    "taskDef": "arn:aws:ecs:ap-northeast-1:792867124641:task-definition/spike-ecs-bg-task-dev:4"
+}
 ```
 
 ---
 
-## 4. 動作確認
+## 5. 動作確認
 
 ### ALB エンドポイント
 ```
@@ -126,18 +133,9 @@ $ curl http://spike-ecs-bg-alb-dev-188059054.ap-northeast-1.elb.amazonaws.com/
 {"message":"Hello from ECS!","version":"1.0.0"}
 ```
 
-### 最終サービス状態
-```json
-{
-    "running": 1,
-    "desired": 1,
-    "taskDef": "arn:aws:ecs:ap-northeast-1:792867124641:task-definition/spike-ecs-bg-task-dev:3"
-}
-```
-
 ---
 
-## 5. リソース一覧
+## 6. リソース一覧
 
 | リソース | 名前/ARN |
 |---------|---------|
@@ -146,13 +144,13 @@ $ curl http://spike-ecs-bg-alb-dev-188059054.ap-northeast-1.elb.amazonaws.com/
 | ALB DNS | spike-ecs-bg-alb-dev-188059054.ap-northeast-1.elb.amazonaws.com |
 | ECS Cluster | spike-ecs-bg-cluster-dev |
 | ECS Service | spike-ecs-bg-service-dev |
-| Task Definition | spike-ecs-bg-task-dev:3 |
+| Task Definition | spike-ecs-bg-task-dev:4 |
 | ECR | 792867124641.dkr.ecr.ap-northeast-1.amazonaws.com/spike-ecs-bg-dev |
 | GitHub Actions Role | arn:aws:iam::792867124641:role/spike-ecs-bg-github-actions-dev |
 
 ---
 
-## 6. 月額コスト概算
+## 7. 月額コスト概算
 
 | リソース | 月額 |
 |---------|------|
@@ -165,14 +163,91 @@ $ curl http://spike-ecs-bg-alb-dev-188059054.ap-northeast-1.elb.amazonaws.com/
 
 ---
 
-## 7. 次のステップ
+## 8. Blue/Green デプロイ検証
 
-1. **GitHub Actions 設定**
-   - Secrets に `AWS_ROLE_ARN` を設定
-   - `.github/workflows/deploy.yml` で CI/CD テスト
+### 設定変更
 
-2. **Blue/Green デプロイへの移行**
-   - AWS Provider 6.4.0+ で `deployment_configuration` に `strategy = "BLUE_GREEN"` を設定
+```hcl
+# terraform/ecs.tf
+deployment_configuration {
+  strategy             = "BLUE_GREEN"
+  bake_time_in_minutes = 5
+}
 
-3. **本番環境（sales-ops）への適用**
+# terraform/alb.tf - 追加リソース
+- aws_lb_target_group.ecs_green  # Green 用ターゲットグループ
+- aws_lb_listener_rule.ecs       # Listener Rule（トラフィック制御用）
+
+# terraform/iam.tf - 追加リソース
+- aws_iam_role.ecs_bluegreen     # ECS B/G 用 IAM ロール
+```
+
+### 必要な IAM 権限
+```json
+{
+  "Action": [
+    "elasticloadbalancing:DescribeTargetGroups",
+    "elasticloadbalancing:DescribeTargetHealth",  // 必須
+    "elasticloadbalancing:DescribeListeners",
+    "elasticloadbalancing:DescribeRules",
+    "elasticloadbalancing:ModifyListener",
+    "elasticloadbalancing:ModifyRule"
+  ]
+}
+```
+
+### デプロイ実行結果
+
+| フェーズ | 時刻 | 状態 |
+|---------|------|------|
+| デプロイ開始 | 23:54 | GitHub Actions 実行 |
+| Green タスク起動 | 23:58 | 新タスク開始 |
+| Green healthy | 23:59 | ヘルスチェック通過 |
+| トラフィック切替 | 00:01 | v2.0.0 に切替 |
+| Blue 終了 | 00:07 | draining → 終了 |
+| デプロイ完了 | 00:08 | COMPLETED |
+
+### 確認コマンド
+```bash
+# B/G 設定確認
+$ aws ecs describe-services --cluster spike-ecs-bg-cluster-dev \
+    --services spike-ecs-bg-service-dev \
+    --query 'services[0].deploymentConfiguration'
+{
+    "strategy": "BLUE_GREEN",
+    "bakeTimeInMinutes": 5
+}
+
+# デプロイ後
+$ curl http://spike-ecs-bg-alb-dev-188059054.ap-northeast-1.elb.amazonaws.com/health
+{"status":"healthy","version":"2.0.0"}
+```
+
+---
+
+## 9. 知見・注意点
+
+1. **ECS ネイティブ B/G は CodeDeploy 不要**
+   - `deployment_configuration { strategy = "BLUE_GREEN" }` のみで OK
+   - `aws-actions/amazon-ecs-deploy-task-definition` そのまま使用可能
+
+2. **必要なリソース**
+   - 2つ目のターゲットグループ（Green 用）
+   - Listener Rule（default_action ではなく Rule で管理）
+   - IAM ロール（ELB 操作権限）
+
+3. **bake_time_in_minutes**
+   - Green が healthy になってからトラフィック切替までの待機時間
+   - この間に Green 環境をテスト可能
+
+4. **IAM 権限エラー**
+   - `DescribeTargetHealth` 権限がないと B/G デプロイが停止する
+   - エラーは `aws ecs describe-services` の events で確認
+
+---
+
+## 10. 次のステップ
+
+1. **本番環境（sales-ops）への適用**
    - 今回の知見を反映
+   - prod 環境の approval フロー追加
