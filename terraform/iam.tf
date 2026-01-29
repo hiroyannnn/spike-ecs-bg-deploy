@@ -188,6 +188,7 @@ resource "aws_iam_role_policy" "ecs_bluegreen" {
         Effect = "Allow"
         Action = [
           "elasticloadbalancing:DescribeTargetGroups",
+          "elasticloadbalancing:DescribeTargetHealth",
           "elasticloadbalancing:DescribeListeners",
           "elasticloadbalancing:DescribeRules",
           "elasticloadbalancing:ModifyListener",
