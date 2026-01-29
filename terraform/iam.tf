@@ -153,9 +153,48 @@ resource "aws_iam_role" "ecs_task" {
   }
 }
 
-# Task Role Policy (必要に応じて追加)
-# resource "aws_iam_role_policy" "ecs_task" {
-#   name = "${var.project_name}-ecs-task-policy"
-#   role = aws_iam_role.ecs_task.id
-#   policy = jsonencode({...})
-# }
+# =============================================================================
+# ECS Blue/Green Deployment Role
+# =============================================================================
+resource "aws_iam_role" "ecs_bluegreen" {
+  name = "${var.project_name}-ecs-bluegreen-${var.environment}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "ecs.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name = "${var.project_name}-ecs-bluegreen-${var.environment}"
+  }
+}
+
+resource "aws_iam_role_policy" "ecs_bluegreen" {
+  name = "${var.project_name}-ecs-bluegreen-policy"
+  role = aws_iam_role.ecs_bluegreen.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "elasticloadbalancing:DescribeTargetGroups",
+          "elasticloadbalancing:DescribeListeners",
+          "elasticloadbalancing:DescribeRules",
+          "elasticloadbalancing:ModifyListener",
+          "elasticloadbalancing:ModifyRule"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}

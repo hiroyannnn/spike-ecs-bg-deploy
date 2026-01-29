@@ -93,7 +93,7 @@ resource "aws_ecs_task_definition" "main" {
   }
 }
 
-# ECS Service
+# ECS Service with Native Blue/Green Deployment
 resource "aws_ecs_service" "main" {
   name            = "${var.project_name}-service-${var.environment}"
   cluster         = aws_ecs_cluster.main.id
@@ -111,12 +111,21 @@ resource "aws_ecs_service" "main" {
     target_group_arn = aws_lb_target_group.ecs.arn
     container_name   = "app"
     container_port   = var.container_port
+
+    advanced_configuration {
+      alternate_target_group_arn = aws_lb_target_group.ecs_green.arn
+      production_listener_rule   = aws_lb_listener_rule.ecs.arn
+      role_arn                   = aws_iam_role.ecs_bluegreen.arn
+    }
   }
 
-  health_check_grace_period_seconds = 60  # ALB ヘルスチェック猶予期間
+  health_check_grace_period_seconds = 60
 
-  # v6.x: deployment_configuration は別途設定
-  # まずはデフォルトのローリングデプロイで動作確認
+  # ECS Native Blue/Green Deployment (AWS Provider v6.4.0+)
+  deployment_configuration {
+    strategy             = "BLUE_GREEN"
+    bake_time_in_minutes = 5
+  }
 
   # aws-actions でデプロイするため、task_definition の変更を無視
   lifecycle {

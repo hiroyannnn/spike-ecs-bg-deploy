@@ -62,6 +62,31 @@ resource "aws_lb_target_group" "ecs" {
   }
 }
 
+# Target Group for ECS (Green - for Blue/Green deployment)
+resource "aws_lb_target_group" "ecs_green" {
+  name        = "${var.project_name}-tg-green-${var.environment}"
+  port        = var.container_port
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.main.id
+  target_type = "ip"
+
+  health_check {
+    enabled             = true
+    healthy_threshold   = 2
+    interval            = 30
+    matcher             = "200"
+    path                = "/health"
+    port                = "traffic-port"
+    protocol            = "HTTP"
+    timeout             = 5
+    unhealthy_threshold = 3
+  }
+
+  tags = {
+    Name = "${var.project_name}-tg-green-${var.environment}"
+  }
+}
+
 # ALB Listener
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
@@ -69,7 +94,32 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "Not Found"
+      status_code  = "404"
+    }
+  }
+}
+
+# Listener Rule for ECS (managed by B/G deployment)
+resource "aws_lb_listener_rule" "ecs" {
+  listener_arn = aws_lb_listener.http.arn
+  priority     = 100
+
+  action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.ecs.arn
+  }
+
+  condition {
+    path_pattern {
+      values = ["/*"]
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [action] # ECS manages this for B/G
   }
 }

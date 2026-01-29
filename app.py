@@ -4,7 +4,7 @@ import uvicorn
 
 app = FastAPI()
 
-VERSION = os.getenv("APP_VERSION", "1.0.0")
+VERSION = os.getenv("APP_VERSION", "2.0.0")
 
 @app.get("/")
 def root():
