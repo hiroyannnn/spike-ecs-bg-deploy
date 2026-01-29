@@ -32,3 +32,9 @@ variable "desired_count" {
   type        = number
   default     = 1
 }
+
+variable "create_oidc_provider" {
+  description = "Whether to create OIDC provider (true for first environment, false for subsequent)"
+  type        = bool
+  default     = true
+}
